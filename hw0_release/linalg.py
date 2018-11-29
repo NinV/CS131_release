@@ -16,7 +16,9 @@ def dot_product(a, b):
     """
     out = None
     ### YOUR CODE HERE
-    pass
+    squeezed_a = np.squeeze(a)
+    squeezed_b = np.squeeze(b)
+    out = np.dot(squeezed_a, squeezed_b)
     ### END YOUR CODE
     return out
 
@@ -37,9 +39,15 @@ def complicated_matrix_function(M, a, b):
     """
     out = None
     ### YOUR CODE HERE
-    pass
+    out = dot_product(dot_product(a, b), dot_product(M, a))
+    # if out is a scalar, convert out to numpy array of shape (1, 1)
+    if np.isscalar(out):
+        out = np.array([[out]])
+    
+    # if out is a numpy array of shape (x,), reshape out to (x, 1)
+    elif len(out.shape) == 1:
+        out = np.expand_dims(out, axis=-1)
     ### END YOUR CODE
-
     return out
 
 

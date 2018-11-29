@@ -20,7 +20,7 @@ def load(image_path):
 
     ### YOUR CODE HERE
     # Use skimage io.imread
-    pass
+    out = io.imread(image_path)
     ### END YOUR CODE
 
     # Let's convert the image to be between the correct range.
@@ -45,7 +45,7 @@ def dim_image(image):
     out = None
 
     ### YOUR CODE HERE
-    pass
+    out = 0.5 * image * image
     ### END YOUR CODE
 
     return out
@@ -66,7 +66,7 @@ def convert_to_grey_scale(image):
     out = None
 
     ### YOUR CODE HERE
-    pass
+    out = color.rgb2gray(image)
     ### END YOUR CODE
 
     return out
@@ -86,7 +86,9 @@ def rgb_exclusion(image, channel):
     out = None
 
     ### YOUR CODE HERE
-    pass
+    out = image.copy()
+    channel_str = {"R": 0, "G": 1, "B": 2}
+    out[:, :, channel_str[channel]] = 0
     ### END YOUR CODE
 
     return out
@@ -107,7 +109,8 @@ def lab_decomposition(image, channel):
     out = None
 
     ### YOUR CODE HERE
-    pass
+    channel_str = {"L": 0, "A": 1, "B": 2}
+    out = lab[:, :, channel_str[channel]]
     ### END YOUR CODE
 
     return out
@@ -128,7 +131,8 @@ def hsv_decomposition(image, channel='H'):
     out = None
 
     ### YOUR CODE HERE
-    pass
+    channel_str = {"H": 0, "S": 1, "V": 2}
+    out = hsv[:, :, channel_str[channel]]
     ### END YOUR CODE
 
     return out
@@ -154,10 +158,38 @@ def mix_images(image1, image2, channel1, channel2):
 
     out = None
     ### YOUR CODE HERE
-    pass
+    h, w = image1.shape[:2]
+    left = rgb_exclusion(image1[:, :h//2, :], channel1)
+    right = rgb_exclusion(image2[:, h//2:, :], channel2)
+    out = np.zeros_like(image1)
+    out[:, :h//2, :] = left
+    out[:, h//2:, :] = right
     ### END YOUR CODE
 
     return out
+
+
+def brighthen_image(image):
+    """Brighthen the quadrant using the function:
+            x_n = x_p^0.5
+
+    where x_n is the new value and x_p is the original value.
+
+    Args:
+        image: numpy array of shape(image_height, image_width, 3).
+
+    Returns:
+        out: numpy array of shape(image_height, image_width, 3).
+    """
+
+    out = None
+
+    ### YOUR CODE HERE
+    out = np.sqrt(image)
+    ### END YOUR CODE
+
+    return out
+
 
 
 def mix_quadrants(image):
@@ -183,7 +215,17 @@ def mix_quadrants(image):
     out = None
 
     ### YOUR CODE HERE
-    pass
+    out = np.zeros_like(image)
+    h, w = image.shape[:2]
+    top_left = rgb_exclusion(image[:h//2, :w//2, :], "R")
+    top_right = dim_image(image[:h//2, w//2:, :])
+    bottom_left = brighthen_image(image[h//2:, :w//2, :])
+    bottom_right = rgb_exclusion(image[h//2:, w//2:, :], "R")
+    
+    out[:h//2, :w//2, :] = top_left
+    out[:h//2, w//2:, :] = top_right
+    out[h//2:, :w//2, :] = bottom_left
+    out[h//2:, w//2:, :] = bottom_right
     ### END YOUR CODE
 
     return out
