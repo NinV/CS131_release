@@ -69,7 +69,7 @@ def svd(M):
     s = None
     v = None
     ### YOUR CODE HERE
-    pass
+    u, s, v = np.linalg.svd(M)
     ### END YOUR CODE
 
     return u, s, v

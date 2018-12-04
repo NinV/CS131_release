@@ -29,7 +29,11 @@ def conv_nested(image, kernel):
     out = np.zeros((Hi, Wi))
 
     ### YOUR CODE HERE
-    pass
+    for row_i in range(Hk//2, Hi -Hk//2):
+        for col_i in range(Wk//2, Wi - Wk//2):
+            for row_k in range(Hk):
+                for col_k in range(Wk): 
+                    out[row_i, col_i] += image[row_i + Hk//2 - row_k, col_i + Wk//2 - col_k] * kernel[row_k, col_k]
     ### END YOUR CODE
 
     return out
@@ -56,7 +60,8 @@ def zero_pad(image, pad_height, pad_width):
     out = None
 
     ### YOUR CODE HERE
-    pass
+    out = np.zeros((H + 2 * pad_height, W + 2 * pad_width), dtype = image.dtype)
+    out[pad_height: H + pad_height, pad_width: W + pad_width] = image
     ### END YOUR CODE
     return out
 
@@ -85,7 +90,14 @@ def conv_fast(image, kernel):
     out = np.zeros((Hi, Wi))
 
     ### YOUR CODE HERE
-    pass
+    kernel = np.flip(kernel, axis=0)
+    kernel = np.flip(kernel, axis=1)
+    Hk, Wk = kernel.shape
+    padded_image = zero_pad(image, Hk // 2, Wk // 2)
+    for row_i in range(Hi):
+        for col_i in range(Wi):
+            out[row_i, col_i] = np.sum(kernel * padded_image[row_i + 1 - Hk // 2: row_i + 1 - Hk // 2 + Hk,
+                                                             col_i + 1 - Wk // 2: col_i + 1 - Wk // 2 + Wk])
     ### END YOUR CODE
 
     return out
@@ -104,9 +116,8 @@ def conv_faster(image, kernel):
     out = np.zeros((Hi, Wi))
 
     ### YOUR CODE HERE
-    pass
+    pass    
     ### END YOUR CODE
-
     return out
 
 def cross_correlation(f, g):
