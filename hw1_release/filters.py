@@ -6,7 +6,6 @@ Date created: 07/2017
 Last modified: 10/16/2017
 Python Version: 3.5+
 """
-
 import numpy as np
 
 
@@ -29,13 +28,15 @@ def conv_nested(image, kernel):
     out = np.zeros((Hi, Wi))
 
     ### YOUR CODE HERE
-    for row_i in range(Hk//2, Hi -Hk//2):
-        for col_i in range(Wk//2, Wi - Wk//2):
+    for row_i in range(Hi):
+        for col_i in range(Wi):
             for row_k in range(Hk):
-                for col_k in range(Wk): 
-                    out[row_i, col_i] += image[row_i + Hk//2 - row_k, col_i + Wk//2 - col_k] * kernel[row_k, col_k]
+                for col_k in range(Wk):
+                    roi_row = row_i + Hk//2 - row_k
+                    roi_col = col_i + Wk//2 - col_k
+                    if 0 <= roi_row < Hi and 0 <= roi_col < Wi:
+                        out[row_i, col_i] += image[roi_row, roi_col] * kernel[row_k, col_k]
     ### END YOUR CODE
-
     return out
 
 def zero_pad(image, pad_height, pad_width):
@@ -92,12 +93,11 @@ def conv_fast(image, kernel):
     ### YOUR CODE HERE
     kernel = np.flip(kernel, axis=0)
     kernel = np.flip(kernel, axis=1)
-    Hk, Wk = kernel.shape
     padded_image = zero_pad(image, Hk // 2, Wk // 2)
     for row_i in range(Hi):
         for col_i in range(Wi):
-            out[row_i, col_i] = np.sum(kernel * padded_image[row_i + 1 - Hk // 2: row_i + 1 - Hk // 2 + Hk,
-                                                             col_i + 1 - Wk // 2: col_i + 1 - Wk // 2 + Wk])
+            out[row_i, col_i] = np.sum(kernel * padded_image[row_i: row_i + Hk,
+                                                             col_i: col_i + Wk])
     ### END YOUR CODE
 
     return out
@@ -116,7 +116,23 @@ def conv_faster(image, kernel):
     out = np.zeros((Hi, Wi))
 
     ### YOUR CODE HERE
-    pass    
+    kernel = np.flip(kernel, axis=0)
+    kernel = np.flip(kernel, axis=1)
+    padded_image = zero_pad(image, Hk // 2, Wk // 2)
+    
+    for row_i in range(Hi):
+        sum_cols = np.sum(kernel * padded_image[row_i: row_i + Hk, : Wk], axis=0)
+        out[row_i, 0] = np.sum(sum_cols)
+        
+        # loop from the second column
+        for col_i in range(1, Wi):
+            # next column
+            next_col = np.sum(kernel[:, -1] * padded_image[row_i: row_i + Hk, col_i + Wk - 1])
+            out[row_i, col_i] = out[row_i, col_i - 1] - sum_cols[0] + next_col
+            
+            # update sum_cols
+            sum_cols[:-1] = sum_cols[1:]
+            sum_cols[-1] = next_col
     ### END YOUR CODE
     return out
 
@@ -135,7 +151,9 @@ def cross_correlation(f, g):
 
     out = None
     ### YOUR CODE HERE
-    pass
+    g = np.flip(g, axis=0)
+    g = np.flip(g, axis=1)
+    out = conv_fast(f, g)
     ### END YOUR CODE
 
     return out
@@ -157,7 +175,12 @@ def zero_mean_cross_correlation(f, g):
 
     out = None
     ### YOUR CODE HERE
-    pass
+    # calculate the mean of kernel g
+    mean_g = np.mean(g)
+    
+    # subtract kernel g to its mean to move its mean to zero
+    g -= mean_g
+    out = cross_correlation(f, g)
     ### END YOUR CODE
 
     return out
@@ -181,7 +204,22 @@ def normalized_cross_correlation(f, g):
 
     out = None
     ### YOUR CODE HERE
-    pass
+    Hg, Wg = g.shape[:2]
+    Hf, Wf = f.shape[:2]
+    out = np.zeros_like(f)
+    
+    # zero mean the kernel g
+    mean_g = np.mean(g)
+    std_g = np.std(g)
+    g = (g - mean_g)/std_g
+    
+    padded_image = zero_pad(f, Hg // 2, Wg // 2)
+    for row_f in range(Hf):
+        for col_f in range(Wf):
+            roi = padded_image[row_f: row_f + Hg, col_f: col_f + Wg]
+            mean_roi = np.mean(roi)
+            std_roi = np.std(roi)
+            roi = (roi - mean_roi)/std_roi
+            out[row_f, col_f] = np.sum(g * roi)
     ### END YOUR CODE
-
     return out
