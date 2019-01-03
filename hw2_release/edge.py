@@ -36,7 +36,11 @@ def conv(image, kernel):
     padded = np.pad(image, pad_width, mode='edge')
 
     ### YOUR CODE HERE
-    pass
+    kernel = np.flip(kernel, axis=0)
+    kernel = np.flip(kernel, axis=1)
+    for row_i in range(Hi):
+        for col_i in range(Wi):
+            out[row_i, col_i] = np.sum(kernel * padded[row_i: row_i + Hk, col_i: col_i + Wk])
     ### END YOUR CODE
 
     return out
@@ -61,7 +65,10 @@ def gaussian_kernel(size, sigma):
     kernel = np.zeros((size, size))
 
     ### YOUR CODE HERE
-    pass
+    k = size // 2
+    for i in range(size):
+        for j in range(size):
+            kernel[i,j] = np.exp(-((i - k)**2 + (j - k)**2)/(2 * sigma**2))/(2 * np.pi * sigma**2)
     ### END YOUR CODE
 
     return kernel
@@ -81,7 +88,11 @@ def partial_x(img):
     out = None
 
     ### YOUR CODE HERE
-    pass
+    kernel = np.array([[0, 0, 0],
+                       [.5, 0, -.5],
+                       [0, 0, 0],
+                     ])
+    out = conv(img, kernel)
     ### END YOUR CODE
 
     return out
@@ -101,7 +112,11 @@ def partial_y(img):
     out = None
 
     ### YOUR CODE HERE
-    pass
+    kernel = np.array([[0, .5, 0],
+                       [0, 0, 0],
+                       [0, -.5, 0],
+                     ])
+    out = conv(img, kernel)
     ### END YOUR CODE
 
     return out
@@ -125,7 +140,10 @@ def gradient(img):
     theta = np.zeros(img.shape)
 
     ### YOUR CODE HERE
-    pass
+    grad_x = partial_x(img)
+    grad_y = partial_y(img)
+    G = np.sqrt(np.power(grad_x, 2) + np.power(grad_y, 2))
+    theta = np.rad2deg(np.arctan2(grad_y, grad_x)) + 180.0
     ### END YOUR CODE
 
     return G, theta
