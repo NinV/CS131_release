@@ -6,8 +6,9 @@ Date created: 07/2017
 Last modified: 10/18/2017
 Python Version: 3.5+
 """
-
 import numpy as np
+from collections import deque
+
 
 def conv(image, kernel):
     """ An implementation of convolution filter.
@@ -45,6 +46,7 @@ def conv(image, kernel):
 
     return out
 
+
 def gaussian_kernel(size, sigma):
     """ Implementation of Gaussian Kernel.
 
@@ -73,6 +75,7 @@ def gaussian_kernel(size, sigma):
 
     return kernel
 
+
 def partial_x(img):
     """ Computes partial x-derivative of input img.
 
@@ -96,6 +99,7 @@ def partial_x(img):
     ### END YOUR CODE
 
     return out
+
 
 def partial_y(img):
     """ Computes partial y-derivative of input img.
@@ -121,6 +125,7 @@ def partial_y(img):
 
     return out
 
+
 def gradient(img):
     """ Returns gradient magnitude and direction of input img.
 
@@ -143,7 +148,10 @@ def gradient(img):
     grad_x = partial_x(img)
     grad_y = partial_y(img)
     G = np.sqrt(np.power(grad_x, 2) + np.power(grad_y, 2))
-    theta = np.rad2deg(np.arctan2(grad_y, grad_x)) + 180.0
+    theta = np.rad2deg(np.arctan2(grad_y, grad_x))
+    
+    # convert angle range from (-180, 180] to [0, 360]
+    theta %= 360.0
     ### END YOUR CODE
 
     return G, theta
@@ -169,10 +177,63 @@ def non_maximum_suppression(G, theta):
     theta = np.floor((theta + 22.5) / 45) * 45
 
     ### BEGIN YOUR CODE
-    pass
+    for row in range(H):
+        for col in range(W):
+
+            """
+            The north and south direction are reversed because the y_axis in
+            Euclidean coordinate is reversing of y_axis of image coordinate 
+            nn = G[row + 1, col]
+            ss = G[row - 1, col]
+            ee = G[row, col + 1]
+            ww = G[row, col - 1]
+            ne = G[row + 1, col + 1]
+            nw = G[row + 1, col - 1]
+            se = G[row - 1, col + 1]
+            sw = G[row - 1, col - 1]
+            """
+            neighbors = []
+            for i in (row - 1, row, row + 1):
+                for j in (col - 1, col, col + 1):
+                    # print('row: {}, col: {}'.format(i, j))
+                    if i < 0 or j < 0 or i >= H or j >= W:
+                        # print('append 0')
+                        neighbors.append(0)
+
+                    elif i == row and j == col:
+                        # print('skip')
+                        continue
+
+                    else:
+                        # print('valid value')
+                        neighbors.append(G[i, j])
+            # print(neighbors)
+            sw, ss, se, ww, ee, nw, nn, ne = neighbors
+
+            # 0 degree
+            if theta[row, col] == 0 or theta[row, col] == 180 or theta[row, col] == 360:
+                if (G[row, col] >= ee) and (G[row, col] >= ww):
+                    out[row, col] = G[row, col]
+            
+            # 45 degree
+            elif theta[row, col] == 45 or theta[row, col] == 225:
+                if (G[row, col] >= ne) and (G[row, col] >= sw):
+                    out[row, col] = G[row, col]
+            
+            # 90 degree
+            elif theta[row, col] == 90 or theta[row, col] == 270:
+                if (G[row, col] >= nn) and (G[row, col] >= ss):
+                    out[row, col] = G[row, col]
+            
+            # 135 degree
+            elif theta[row, col] == 135 or theta[row, col] == 315:
+                if (G[row, col] >= nw) and (G[row, col] >= se):
+                    out[row, col] = G[row, col]
+                
     ### END YOUR CODE
 
     return out
+
 
 def double_thresholding(img, high, low):
     """
@@ -194,7 +255,14 @@ def double_thresholding(img, high, low):
     weak_edges = np.zeros(img.shape, dtype=np.bool)
 
     ### YOUR CODE HERE
-    pass
+    H, W = img.shape
+    for row in range(H):
+        for col in range(W):
+            if img[row, col] > high:
+                strong_edges[row, col] = True
+
+            elif img[row, col] > low:
+                weak_edges[row, col] = True
     ### END YOUR CODE
 
     return strong_edges, weak_edges
@@ -227,6 +295,7 @@ def get_neighbors(y, x, H, W):
 
     return neighbors
 
+
 def link_edges(strong_edges, weak_edges):
     """ Find weak edges connected to strong edges and link them.
 
@@ -253,10 +322,31 @@ def link_edges(strong_edges, weak_edges):
     edges = np.copy(strong_edges)
 
     ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    # loop through every strong edges
+    for y_s, x_s in indices:
+        # find weak edges that connected to strong edges
+        neighbors_s = get_neighbors(y_s, x_s, H, W)
+        for y_w, x_w in neighbors_s:
+            # found weak edge
+            if weak_edges[y_w, x_w]:
+                edges[y_w, x_w] = True
 
+                # Using BFS to find remaining pixel of the weak edge
+                visited = {(y_w, x_w)}
+                frontiers = deque([(y_w, x_w)])
+                while frontiers:
+                    node = frontiers.popleft()
+                    neighbors_w = get_neighbors(*node, H, W)
+                    for node_w in neighbors_w:
+                        if node_w not in visited:
+                            visited.add(node_w)
+                            y_n, x_n = node_w
+                            if weak_edges[y_n, x_n]:
+                                edges[y_n, x_n] = True
+                                frontiers.append(node_w)
+    ### END YOUR CODE
     return edges
+
 
 def canny(img, kernel_size=5, sigma=1.4, high=20, low=15):
     """ Implement canny edge detector by calling functions above.
@@ -271,7 +361,21 @@ def canny(img, kernel_size=5, sigma=1.4, high=20, low=15):
         edge: numpy array of shape(H, W).
     """
     ### YOUR CODE HERE
-    pass
+    # Gaussian blurring to reduce noise
+    kernel = gaussian_kernel(kernel_size, sigma)
+    smoothed = conv(img, kernel)
+
+    # Find gradient
+    G, theta = gradient(smoothed)
+
+    # Non-maximum suppression to thin to edge
+    thinned_edge = non_maximum_suppression(G, theta)
+
+    # double thresholding
+    strong_edges, weak_edges = double_thresholding(thinned_edge, high, low)
+
+    # link weak edges to strong edges
+    edge = link_edges(strong_edges, weak_edges)
     ### END YOUR CODE
 
     return edge
