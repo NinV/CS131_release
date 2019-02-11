@@ -11,8 +11,10 @@ import numpy as np
 from skimage import filters
 from skimage.feature import corner_peaks
 from skimage.util.shape import view_as_blocks
-from scipy.spatial.distance import cdist
+from scipy.spatial.distance import cdist, euclidean
 from scipy.ndimage.filters import convolve
+import math
+from sklearn.preprocessing import normalize
 
 from utils import pad, unpad, get_output_space, warp_image
 
@@ -44,7 +46,22 @@ def harris_corners(img, window_size=3, k=0.04):
     dy = filters.sobel_h(img)
 
     ### YOUR CODE HERE
-    pass
+    # compute product of derivatives for every pixels
+    dx_2 = dx * dx
+    dy_2 = dy * dy
+    dxy = dx * dy
+
+    # compute convolution of window on derivative matrices
+    dx_2_w = convolve(dx_2, window, mode='constant', cval=0.0)
+    dy_2_w = convolve(dy_2, window, mode='constant', cval=0.0)
+    dxy_w = convolve(dxy, window, mode='constant', cval=0.0)
+
+    # Calculate Harris response for every pixels
+    for y in range(H):
+        for x in range(W):
+            M = np.array([[dx_2_w[y, x], dxy_w[y, x]],
+                         [dxy_w[y, x], dy_2_w[y, x]]])
+            response[y, x] = np.linalg.det(M) - k * (np.trace(M)) ** 2
     ### END YOUR CODE
 
     return response
@@ -70,7 +87,13 @@ def simple_descriptor(patch):
     """
     feature = []
     ### YOUR CODE HERE
-    pass
+    mean = np.mean(patch)
+    sigma = np.std(patch)
+    if math.isclose(sigma, 0.0):
+        feature = (patch - mean).flatten()
+    else:
+        feature = ((patch - mean)/sigma).flatten()
+
     ### END YOUR CODE
     return feature
 
@@ -123,9 +146,14 @@ def match_descriptors(desc1, desc2, threshold=0.5):
     dists = cdist(desc1, desc2)
 
     ### YOUR CODE HERE
-    pass
-    ### END YOUR CODE
+    for kp1_idx in range(N):
+        dist = dists[kp1_idx]
+        sorted_dist_arg = np.argsort(dist)
+        if dist[sorted_dist_arg[0]] < threshold * dist[sorted_dist_arg[1]]:
+            matches.append([kp1_idx, sorted_dist_arg[0]])
 
+    matches = np.asanyarray(matches, dtype=np.int)
+    ### END YOUR CODE
     return matches
 
 
@@ -143,18 +171,19 @@ def fit_affine_matrix(p1, p2):
         H: a matrix of shape (P, P) that transform p2 to p1.
     """
 
-    assert (p1.shape[0] == p2.shape[0]),\
+    assert (p1.shape[0] == p2.shape[0]), \
         'Different number of points in p1 and p2'
     p1 = pad(p1)
     p2 = pad(p2)
 
     ### YOUR CODE HERE
-    pass
+    H = np.linalg.lstsq(p2, p1)[0]
     ### END YOUR CODE
 
     # Sometimes numerical issues cause least-squares to produce the last
     # column which is not exactly [0, 0, 1]
-    H[:,2] = np.array([0, 0, 1])
+    H[:, 2] = np.array([0, 0, 1])
+
     return H
 
 
@@ -185,7 +214,6 @@ def ransac(keypoints1, keypoints2, matches, n_iters=200, threshold=20):
     matches = matches.copy()
 
     N = matches.shape[0]
-    print(N)
     n_samples = int(N * 0.2)
 
     matched1 = pad(keypoints1[matches[:,0]])
@@ -196,9 +224,36 @@ def ransac(keypoints1, keypoints2, matches, n_iters=200, threshold=20):
 
     # RANSAC iteration start
     ### YOUR CODE HERE
-    pass
+    for iter in range(n_iters):
+        # randomly sampling pairs of matching points
+        pair_pts_idx = np.random.choice(N, n_samples, replace=False)
+        pts_1 = matched1[pair_pts_idx]
+        pts_2 = matched2[pair_pts_idx]
+
+        # Get the affine transformation matrix H from sample points
+        H = np.linalg.lstsq(pts_2, pts_1)[0]
+
+        # find the inliers
+        inliers_idxes = []
+        temp_n_inliers = 0
+        for idx in range(N):
+            p1, p2 = matched1[idx], matched2[idx]
+            p1_pred = np.dot(p2, H)
+            dist = euclidean(p1_pred[:2], p1[:2])
+            if dist < threshold:
+                temp_n_inliers += 1
+                inliers_idxes.append(idx)
+        if temp_n_inliers > n_inliers:
+            n_inliers = temp_n_inliers
+            max_inliers = np.array(inliers_idxes)
+
+    # re-calculate the transformation matrix H using new inliers
+    pts_1 = matched1[max_inliers]
+    pts_2 = matched2[max_inliers]
+
+    # Get the affine transformation matrix H from sample points
+    H = np.linalg.lstsq(pts_2, pts_1)[0]
     ### END YOUR CODE
-    print(H)
     return H, orig_matches[max_inliers]
 
 
@@ -248,7 +303,16 @@ def hog_descriptor(patch, pixels_per_cell=(8,8)):
 
     # Compute histogram per cell
     ### YOUR CODE HERE
-    pass
+    for row_c in range(rows):
+        for col_c in range(cols):
+            for orientation, magnitude in zip(theta_cells[row_c, col_c].flatten(), G_cells[row_c, col_c].flatten()):
+                cells[row_c, col_c, min(8, int(orientation / degrees_per_bin))] += magnitude
+
+    # Flatten cells
+    block = cells.flatten()
+
+    # normalize
+    block /= np.linalg.norm(block)
     ### YOUR CODE HERE
 
     return block
