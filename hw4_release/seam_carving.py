@@ -9,6 +9,7 @@ Python Version: 3.5+
 
 import numpy as np
 from skimage import color
+from scipy.ndimage import convolve
 
 
 def energy_function(image):
@@ -30,7 +31,8 @@ def energy_function(image):
     gray_image = color.rgb2gray(image)
 
     ### YOUR CODE HERE
-    pass
+    gy, gx = np.gradient(gray_image)
+    out = np.abs(gx) + np.abs(gy)
     ### END YOUR CODE
 
     return out
@@ -77,7 +79,26 @@ def compute_cost(image, energy, axis=1):
     paths[0] = 0  # we don't care about the first row of paths
 
     ### YOUR CODE HERE
-    pass
+    for row in range(1, H):
+        # padding row with infinite values so that when we find the minimum
+        # value in a row, these padded columns will not show up
+        padded = np.ones(W + 2) * float("inf")
+
+        # assign values for padded row with previous cost
+        padded[1:-1] = cost[row - 1]
+
+        # find the minimum index in the cost of previous row with the kernel
+        # size of 3
+        mins = np.argmin(padded[np.arange(W).reshape(W, 1) + np.arange(3)],
+                         axis=1)
+
+        # shift the minimum index range from (0, 1, 2) to (-1, 0 , 1) and we got
+        # the path for the current row
+        paths[row] = mins - 1
+
+        # calculate the cost of current row
+        cost[row, :] = energy[row, :] + cost[row - 1, paths[row] + np.arange(W)]
+
     ### END YOUR CODE
 
     if axis == 0:
@@ -115,7 +136,8 @@ def backtrack_seam(paths, end):
     seam[H-1] = end
 
     ### YOUR CODE HERE
-    pass
+    for row in range(H - 2, -1, -1):
+        seam[row] = seam[row + 1] + paths[row + 1, seam[row + 1]]
     ### END YOUR CODE
 
     # Check that seam only contains values in [0, W-1]
@@ -145,7 +167,9 @@ def remove_seam(image, seam):
     out = None
     H, W, C = image.shape
     ### YOUR CODE HERE
-    pass
+    id_arr = np.ones((H, W), dtype=bool)
+    id_arr[np.arange(H), seam] = False
+    out = image[id_arr].reshape(H, -1, C)
     ### END YOUR CODE
     out = np.squeeze(out)  # remove last dimension if C == 1
 
@@ -190,7 +214,15 @@ def reduce(image, size, axis=1, efunc=energy_function, cfunc=compute_cost):
     assert size > 0, "Size must be greater than zero"
 
     ### YOUR CODE HERE
-    pass
+
+    while W > size:
+        energy = efunc(out)
+        cost, paths = cfunc(out, energy)
+        end = np.argmin(cost[-1])
+        seam = backtrack_seam(paths, end)
+        out = remove_seam(out, seam)
+        W = out.shape[1]
+
     ### END YOUR CODE
 
     assert out.shape[1] == size, "Output doesn't have the right shape"
@@ -217,7 +249,11 @@ def duplicate_seam(image, seam):
     H, W, C = image.shape
     out = np.zeros((H, W + 1, C))
     ### YOUR CODE HERE
-    pass
+    for row in range(H):
+        idx = seam[row]
+        out[row, :idx + 1] = image[row, :idx + 1]
+        out[row, idx + 1] = image[row, idx]
+        out[row, idx + 2:] = image[row, idx + 1:]
     ### END YOUR CODE
 
     return out
@@ -255,7 +291,13 @@ def enlarge_naive(image, size, axis=1, efunc=energy_function, cfunc=compute_cost
     assert size > W, "size must be greather than %d" % W
 
     ### YOUR CODE HERE
-    pass
+    while W < size:
+        energy = efunc(out)
+        cost, paths = cfunc(out, energy)
+        end = np.argmin(cost[-1])
+        seam = backtrack_seam(paths, end)
+        out = duplicate_seam(out, seam)
+        W = out.shape[1]
     ### END YOUR CODE
 
     if axis == 0:
@@ -336,7 +378,6 @@ def find_seams(image, k, axis=1, efunc=energy_function, cfunc=compute_cost):
 
     if axis == 0:
         seams = np.transpose(seams, (1, 0))
-
     return seams
 
 
@@ -373,7 +414,11 @@ def enlarge(image, size, axis=1, efunc=energy_function, cfunc=compute_cost):
     assert size <= 2 * W, "size must be smaller than %d" % (2 * W)
 
     ### YOUR CODE HERE
-    pass
+    seams = find_seams(out, size - W, efunc=efunc, cfunc=cfunc)
+    for idx in range(1, size - W + 1):
+        _, seam = np.where(seams == idx)
+        seam = seam + idx - 1
+        out = duplicate_seam(out, seam)
     ### END YOUR CODE
 
     if axis == 0:
@@ -415,7 +460,38 @@ def compute_forward_cost(image, energy):
     paths[0] = 0  # we don't care about the first row of paths
 
     ### YOUR CODE HERE
-    pass
+    CL, CR, CV = inserted_energy(image)
+    for row in range(1, H):
+        print('row', row)
+        # padding row with infinite values so that when we find the minimum
+        # value in a row, these padded columns will not show up
+        padded = np.ones(W + 2) * float("inf")
+
+        # assign values for padded row with previous cost
+        padded[1:-1] = cost[row - 1]
+
+        # add CL, CR and CV to padded previous cost
+        c = np.hstack((CL[row].reshape(W, 1),
+                       CV[row].reshape(W, 1),
+                       CR[row].reshape(W, 1)))
+
+        print('CL:\n', CL[row])
+        print('CV:\n', CV[row])
+        print('CR:\n', CR[row])
+
+
+        cost_with_inserted_energy = padded[np.arange(W).reshape(W, 1) + np.arange(3)] + c
+
+        # get argmins to find the paths
+        argmins = np.argmin(cost_with_inserted_energy, axis=1)
+
+        # shift the minimum index range from (0, 1, 2) to (-1, 0 , 1) and we got
+        # the path for the current row
+        paths[row] = argmins - 1
+
+        # update value for current cost
+        cost[row, :] = energy[row, :] + cost_with_inserted_energy.T[argmins, range(W)]
+
     ### END YOUR CODE
 
     # Check that paths only contains -1, 0 or 1
@@ -423,6 +499,25 @@ def compute_forward_cost(image, energy):
            "paths contains other values than -1, 0 or 1"
 
     return cost, paths
+
+
+def inserted_energy(image):
+    V = np.array([[-1, 0, 1]])
+    L = np.array([[0, 0, 0],
+                  [0, 0, 1],
+                  [0, -1, 0]])
+    R = np.array([[0, 0, 0],
+                  [1, 0, 0],
+                  [0, -1, 0]])
+
+    dL = convolve(image, L, mode='constant', cval=0.0)
+    dR = convolve(image, R, mode='constant', cval=0.0)
+    dV = convolve(image, V, mode='constant', cval=0.0)
+
+    CV = np.abs(dV)
+    CL = np.abs(dL) + CV
+    CR = np.abs(dR) + CV
+    return CL, CR, CV
 
 
 def reduce_fast(image, size, axis=1, efunc=energy_function, cfunc=compute_cost):
@@ -456,7 +551,6 @@ def reduce_fast(image, size, axis=1, efunc=energy_function, cfunc=compute_cost):
     ### YOUR CODE HERE
     # Delete that line, just here for the autograder to pass setup checks
     out = reduce(image, size, 1, efunc, cfunc)
-    pass
     ### END YOUR CODE
 
     assert out.shape[1] == size, "Output doesn't have the right shape"
