@@ -45,10 +45,33 @@ def kmeans(features, k, num_iters=100):
 
     for n in range(num_iters):
         ### YOUR CODE HERE
-        pass
+        new_assignments = np.zeros(N)
+
+        # assign each point to the closest cluster
+        for i, point in enumerate(features):
+            min_distance = float('inf')
+            for cluster_label, center in enumerate(centers):
+                distance = np.linalg.norm(center - point)
+                if distance < min_distance:
+                    min_distance = distance
+                    new_assignments[i] = cluster_label
+
+        # Stop if cluster assignments did not change
+        if np.array_equal(new_assignments, assignments):
+            break
+
+        assignments = new_assignments
+
+        # recalculate centroid for each cluster
+        for cluster_label in range(k):
+            cluster = features[new_assignments == cluster_label]
+            centers[cluster_label] = np.mean(cluster, axis=0)
+
+
         ### END YOUR CODE
 
     return assignments
+
 
 def kmeans_fast(features, k, num_iters=100):
     """ Use kmeans algorithm to group features into k clusters.
@@ -81,7 +104,22 @@ def kmeans_fast(features, k, num_iters=100):
 
     for n in range(num_iters):
         ### YOUR CODE HERE
-        pass
+        # assign each point to the closest cluster
+        f_broadcast = np.repeat(features, k, axis=0).reshape(N, k, -1)
+        c_broadcast = np.swapaxes(np.repeat(centers, N, axis=0).reshape(k, N, -1), 1, 0)
+        distances = np.linalg.norm(c_broadcast - f_broadcast, axis=2)
+        new_assignments = np.argmin(distances, axis=1)
+
+        # Stop if cluster assignments did not change
+        if np.array_equal(new_assignments, assignments):
+            break
+
+        assignments = new_assignments
+
+        # recalculate centroid for each cluster
+        for cluster_label in range(k):
+            cluster = features[new_assignments == cluster_label]
+            centers[cluster_label] = np.mean(cluster, axis=0)
         ### END YOUR CODE
 
     return assignments
@@ -120,8 +158,6 @@ def hierarchical_clustering(features, k):
             (e.g. i-th point is assigned to cluster assignments[i])
     """
 
-
-
     N, D = features.shape
 
     assert N >= k, 'Number of clusters cannot be greater than number of points'
@@ -134,6 +170,7 @@ def hierarchical_clustering(features, k):
     while n_clusters > k:
         ### YOUR CODE HERE
         pass
+
         ### END YOUR CODE
 
     return assignments
@@ -154,7 +191,7 @@ def color_features(img):
     features = np.zeros((H*W, C))
 
     ### YOUR CODE HERE
-    pass
+    features = img.reshape(-1, C)
     ### END YOUR CODE
 
     return features
@@ -183,7 +220,18 @@ def color_position_features(img):
     features = np.zeros((H*W, C+2))
 
     ### YOUR CODE HERE
-    pass
+    # add pixel colors to features map
+    features[:, :3] = img.reshape(-1, C)
+
+    # add pixel position to features map. Need to swap x, y columns
+    features[:, 3:] = np.dstack(np.mgrid[:W, :H]).reshape(-1, 2)[:, -1::-1]
+
+    # calculate feature means and stds for each channel
+    means = np.mean(features, axis=0)
+    stds = np.std(features, axis=0)
+
+    # normalize features
+    features = (features - means) / stds
     ### END YOUR CODE
 
     return features
